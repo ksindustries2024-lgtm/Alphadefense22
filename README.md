@@ -1,2 +1,1 @@
-# Alphadefense22
-Quantitative Fraud Detection with Explainable AI &amp; Risk Analytics
+AlphaDefense: Quantitative Fraud Detection System with Explainable AI, Risk Analytics and Fairness Auditing.
