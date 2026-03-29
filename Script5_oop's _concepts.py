@@ -68,7 +68,7 @@ t2 = Transaction(99999, True)   # fraudulent transaction
  
 # Accessing attributes directly
 print(t1.amount)        # 5000
-print(t2.is_fraud)      # True
+print(t2.is_fraud)      # True if some_value: ka matlab hai if some_value == True: — shorthand hai bas.
  
 # Calling check_fraud method
 # Note: check_fraud vs check_fraud()
