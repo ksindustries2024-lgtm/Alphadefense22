@@ -98,7 +98,7 @@ print(t2.transaction_summary())
  
 # 4. One method can call another method via self
 #    transaction_summary calls check_fraud using self.check_fraud()
- 
+#print(t1.check_fraud) — method ka memory address print hota hai, jo return value ka address nahi hai — method object ka address hai. Function abhi chali hi nahi, toh koi return value exist hi nahi karti. 
 # ─────────────────────────────────────────────
 # ALPHADEFENSE CONNECTION
 # ─────────────────────────────────────────────
@@ -108,3 +108,12 @@ print(t2.transaction_summary())
 # and methods like compute_risk_score(), apply_garch(),
 # get_shap_explanation() as behaviour.
 # This Transaction class is the seed of AlphaDefense.
+#t3 = Transaction(250, False)
+#t3.amount = 99999
+#```
+
+#`is_fraud` kabhi change nahi hua — woh `False` hi raha. Sirf `amount` change hua.
+
+#Toh `transaction_summary()` return karega:
+#```
+#Amount: 99999 | Fraud: False | Status: CLEAR: Legitimate transaction
