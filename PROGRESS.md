@@ -1,67 +1,81 @@
-# AlphaDefense v2.0 — Progress Log
+# AlphaDefense — Progress Log
 
-This file is the single source of truth for where the project actually stands.
-Rule: if it's not written here, it didn't happen. Update this BEFORE closing
-any work session — not "later," not "tomorrow." Two minutes, every session.
+Cross-session/cross-account context source. Update after every gate-cleared script or phase milestone.
 
 ---
 
-## HOW TO USE THIS FILE
+## Phase 0 — Python Scripting Track (Scripts 1–13)
 
-1. Every session (any account, any device), read the "CURRENT STATE" block first — that's your context reload.
-2. At the end of the session, update CURRENT STATE and add one line to the log below it.
-3. Never mark a phase/script "done" here unless it passed a gate test. "I understand it" is not "done."
-4. Commit this file with every meaningful commit: `git add PROGRESS_LOG.md && git commit -m "log: <what changed>"`.
-
----
-
-## CURRENT STATE (last updated: 2026-07-05)
-
-**Phase 0 — Python Scripting (Scripts 1–13):** IN PROGRESS
-- Scripts 1–9: COMPLETE, gate-cleared.
-- Script 10 (Decorators): NOT gate-cleared. Two items open:
-  1. `@audit_log` decorator for fraud-scoring functions (log function name, transaction ID, fraud probability, `time.perf_counter()` execution time) — NOT SUBMITTED
-  2. Written trace of the decorator-stacking trap (kwargs mutation across layers) — NOT SUBMITTED
-- Script 11: LOCKED. Does not open until both Script 10 items are submitted and tested.
-
-**Phase 1 (EDA) → Phase 8 (Deployment):** NOT STARTED — blocked behind Phase 0 completion.
-
-**Parallel track — DSA Sprint (Google SWE OA prep):**
-- Google SWE Internship application submitted June 28, 2026. OA expected late July–mid August.
-- 21-day sprint protocol assigned (Week 1: arrays/hashmaps/two pointers/sliding window; Week 2: binary search/trees/linked lists/heaps; Week 3: graphs/DP/backtracking; 25–30 problems/week).
-- Status: NOT YET CONFIRMED STARTED — verify streak status next session.
-
-**Known failure pattern to watch:** using clarifying/meta-questions to stall instead of producing code. Flagged once already — do not let it recur silently.
+| Script | Topic | Status |
+|---|---|---|
+| 1 | Loops / Conditionals | ✅ Gate-cleared |
+| 2 | Functions | ✅ Gate-cleared |
+| 3 | Default Args / *args / **kwargs | ✅ Gate-cleared |
+| 4 | Function Composition | ✅ Gate-cleared |
+| 5 | OOP | ✅ Gate-cleared |
+| 6 | Lists / Dicts | ✅ Gate-cleared |
+| 7 | CSV + Pandas Basics | ✅ Gate-cleared |
+| 8 | Pandas Advanced (data leakage, fit vs transform) | ✅ Gate-cleared |
+| 9 | Comprehensions | ✅ Gate-cleared |
+| 10 | Decorators | ✅ Gate-cleared |
+| 11 | Error Handling + Logging | 🔓 Unlocked — active |
+| 12 | File I/O + JSON | 🔒 Locked |
+| 13 | Modules + Imports | 🔒 Locked |
 
 ---
 
-## RESUME BULLETS (locked, do not inflate)
-- 590,540 transactions processed on IEEE-CIS dataset
-- 338 model-ready features engineered
-- 64M+ null values resolved
-- `scale_pos_weight` tuned to 27.58 for class imbalance
-- Verified stratified train/test split
+## Script 10 — Decorators (GATE-CLEARED)
+**Date:** 2026-07-13
+
+**Deliverable 1:** `@audit_log` decorator for fraud-scoring functions.
+- Uses `functools.wraps` to preserve original function identity.
+- Uses `try/finally` to guarantee the audit log is written even if the underlying
+  scoring function raises an exception.
+- Generalized via `*args`/`**kwargs` to work on any scoring function signature.
+
+**Deliverable 2:** Written trace of the decorator-stacking kwargs mutation bug.
+- Root cause: with `@audit_log` on top of `@add_default_threshold`, audit_log becomes
+  the outermost wrapper and its `log(kwargs)` call fires **before**
+  `add_default_threshold` mutates the dictionary to add the `threshold` key.
+- Result: `logged = {'txn_id': 1}` while `actually received by score_transaction =
+  {'txn_id': 1, 'threshold': 0.5}`.
+- Compliance risk: the audit log cannot serve as reliable proof of what parameters
+  drove a fraud decision — regulatory/audit exposure if a flagged transaction is
+  ever disputed.
+- Fix direction identified: log the final kwargs state (post-mutation), not the
+  early snapshot.
+
+**Gate quiz:** 3/3 passed — stack-flip reasoning, concrete fix description,
+functools.wraps rationale.
+
+**Artifacts:** `Script10_Decorators_Revision_Notes.pdf` (definitions, mechanism
+trace, correct-vs-lacked self-assessment, quiz record). Working, tested code
+in `audit_log_decorator.py`.
+
+**Post-gate correction:** first draft of `audit_log_decorator.py` still had
+`@audit_log` on top of `@add_default_threshold` and claimed logging inside
+`finally` would fix the timing bug. Running it proved this false — each
+wrapper's `**kwargs` is a separate dict, so a mutation two layers down never
+propagates back up. Real fix: reorder the stack so `add_default_threshold`
+is OUTER (mutates first) and `audit_log` is INNER (logs the completed dict).
+Verified by running the script and reading `audit_trail.log` directly.
 
 ---
 
-## SESSION LOG (append new entries at the top, newest first)
-
-### 2026-07-05
-- Created this PROGRESS_LOG.md to fix cross-account context loss.
-- Verified state: Script 10 still has 2 open items, unsubmitted. Google OA window opens in ~3–6 weeks.
-- Action owed by Krrish: submit `@audit_log` code + decorator-stacking trace before any new conceptual teaching resumes.
-
-<!-- Add new entries above this line. Format:
-### YYYY-MM-DD
-- What you built/attempted
-- What broke / what you didn't understand
-- What's still open
-- Next concrete action (with deadline)
--->
+## Currently Active: Script 11 — Error Handling + Logging
+Started: 2026-07-13. Not yet gate-cleared.
 
 ---
 
-## HARD RULES BAKED INTO THIS FILE
-- No new script/phase unlocks until the open items above are cleared and tested.
-- If you (Krrish) open this file and CURRENT STATE says something is "IN PROGRESS" that you thought was done — it isn't done. Don't argue with the log, close the gap.
-- If two weeks pass with no new session log entry, that is a stall, not a slow week. Say so out loud to your mentor (Claude) the next time you talk.
+## Parallel Tracks
+- Google SWE Internship: applied 2026-06-28 (deadline day). OA contact expected
+  late July–mid August 2026.
+- 21-day DSA sprint: Week 1 arrays/hashmaps/two pointers/sliding window,
+  Week 2 binary search/trees/linked lists/heaps, Week 3 graphs/DP/backtracking.
+
+---
+
+## Next Milestone
+Complete Script 11 → Script 12 (File I/O + JSON) → Script 13 (Modules + Imports)
+→ close out Phase 0 → begin Phase 1 (EDA on IEEE-CIS dataset).
+
