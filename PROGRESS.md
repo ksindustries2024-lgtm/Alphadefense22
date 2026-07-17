@@ -18,72 +18,79 @@ Cross-session/cross-account context source. Update after every gate-cleared scri
 | 9 | Comprehensions | ✅ Gate-cleared |
 | 10 | Decorators | ✅ Gate-cleared |
 | 11 | Error Handling + Logging | ✅ Gate-cleared |
-| 12 | File I/O + JSON | 🔓 Unlocked — active |
-| 13 | Modules + Imports | 🔒 Locked |
+| 12 | File I/O + JSON | ✅ Gate-cleared |
+| 13 | Modules + Imports | 🔓 Unlocked — active |
+| 13.5 | Generators (yield, lazy iteration) — added for memory-efficient handling of 590K-row dataset in later phases | 🔒 Locked, queued after 13 |
 
 ---
 
-## Script 11 — Error Handling + Logging (GATE-CLEARED)
-**Date:** 2026-07-16
+## Script 12 — File I/O + JSON (GATE-CLEARED)
+**Date:** 2026-07-17
 
-**Deliverable 1:** `transaction_processor.py` — `score_transaction()` handling three
-distinct failure modes with separate except blocks:
-- `ValueError` — amount present but not a valid number
-- `KeyError` — amount field missing entirely
-- `InvalidTransactionError` (custom, inherits `Exception`) — amount is a valid
-  number but violates a business rule (negative), which Python has no built-in
-  concept of — only domain logic can catch it
-- Every except block returns explicitly to avoid falling through to code that
-  assumes success (see deliberate-error trace below)
-- Logging via `basicConfig` (filename, `level=INFO`, timestamped format),
-  replacing print-based debugging
+**Deliverable:** `batch_processor.py` — reads a batch of transactions from
+`transactions.json`, scores each with `score_transaction()` (Script 11 logic
+reused directly), writes a labeled summary to `results_summary.json`.
 
-**Deliverable 2:** Written trace of the `UnboundLocalError` deliberate-error bug.
-- Root cause: in a buggy version, `except Exception` logged the failure but had
-  no `return`, so execution fell through to `return risk_score` — a variable
-  never assigned because the line that would have created it was skipped by
-  the exception.
-- Real traceback obtained by execution: `UnboundLocalError: cannot access local
-  variable 'risk_score' where it is not associated with a value`.
-- Key distinction established: logging records that something went wrong; it
-  does not change control flow. Only an explicit `return` (or safe fallback
-  assignment) stops execution from reaching code that assumes success.
-- AlphaDefense compliance stake: in a production batch loop, an uncaught
-  `UnboundLocalError` from one bad transaction propagates out of
-  `score_transaction` and crashes the entire batch — every transaction after
-  the failure point never gets scored.
+**Core mechanics covered:** `with open()` file handling, `'r'`/`'w'`/`'a'`
+mode selection matched to actual intent (corrected an early overcorrection
+toward "always use `'a'`"), why JSON exists as a cross-language persistence
+format, `f.read()` (string) vs `json.load()` (real parsed dict/list)
+distinction, `json.dump(data, f)` argument order.
 
-**Gate quiz:** 3/3 passed (final attempt) — logging-vs-control-flow distinction,
-severity threshold filtering (WARNING suppresses INFO/DEBUG), UnboundLocalError
-propagation mechanism through an unprotected batch loop.
+**Real bugs found and fixed during construction:**
+1. Unclosed file handle in a plain `open()` (no `with`, no `.close()`) —
+   deliberate-error exercise, correctly connected to OS file-handle exhaustion
+   risk at AlphaDefense production scale
+2. `json.decoder.JSONDecodeError` — discovered via real execution (deliberately
+   broke a JSON file, read Python's actual traceback), not guessed; caught
+   writing the bare name (`JSONDecodeError`) without the `json.` prefix twice
+   before correcting to match the `json.load`/`json.dump` pattern
+3. **Real crash reproduced live:** `process_batch()` initially had no guard
+   against `load_transactions()` returning `None`. Deleted `transactions.json`
+   and ran the pipeline — produced `TypeError: 'NoneType' object is not
+   iterable` at `for txn in transactions:`. Fixed with a guard clause
+   (`if transactions is None: return {...}`) before the loop — same defensive
+   pattern as Script 11's `UnboundLocalError` fix
+4. Output design: `process_batch()` initially returned an unlabeled tuple
+   (`[1, 2]` in the JSON file, no way to tell which count was which) —
+   corrected to a labeled dict (`{'success_count': ..., 'error_count': ...}`)
+
+**Gate quiz:** 3/3 on reattempt (first attempt failed all three — required
+redo before advancing, no rounding up). Final pass covered: why `for` loops
+crash on `None` (not iterable, unrelated to JSON conversion), the nature and
+correct discovery method for `JSONDecodeError`, and why a missing `return` in
+an `except` block lets execution fall through to code after the whole
+try/except/else/finally block (`else` is always skipped once an exception has
+fired; `finally` always runs regardless).
 
 **Artifacts:**
-- `Script11_Full_Journey_Notes.pdf` — full theory, layer-by-layer construction
-  log of every bug found and fixed, gap tracker, quiz record
-- `transaction_processor.py` — tested, working, verified via real execution
-  against 5 transactions covering all failure modes + success paths
+- `Script12_FileIO_JSON_Full_Notes.pdf` — theory, full construction log with
+  every bug in the order it happened, gap tracker, quiz record
+- `batch_processor.py` — tested, verified via real execution against 5
+  transactions (negative, wrong-type, two valid, missing key) and separately
+  against a missing-input-file scenario, both producing correct, crash-free
+  output
 
-**Bugs found and fixed during construction (real, not idealized):**
-1. Custom exception class incorrectly inherited from a function
-   (`score_transaction`) with the function nested inside the exception class body
-2. `logging.basicConfig` typos: `file_name` → `filename`, duplicate
-   `format=format=` → single `format=`
-3. `logging.get_Logger` → `logging.getLogger` (capitalization)
-4. `logged.debug(...)` referenced an undefined variable → corrected to `logger`
-5. `risk_sore` typo → `risk_score`
-6. Custom exception class was defined but never actually raised — added the
-   negative-amount business rule check
-7. Deliberate-error exercise: found and explained the `UnboundLocalError` root
-   cause via a real traceback, not a guess
-8. First deliverable draft nested the transaction loop inside
-   `score_transaction()` itself instead of wrapping external calls — restructured
-9. Test data syntax error (`{'txn_id': 5, :200}` — value with no key) — corrected
-   to `{'txn_id': 5}` to properly trigger the `KeyError` path
+**Verified output (real run):**
+```
+transactions.json (5 txns) → results_summary.json: {"success_count": 2, "error_count": 3}
+transactions.json missing  → results_summary.json: {"success_count": 0, "error_count": 0}, no crash
+```
 
 ---
 
-## Currently Active: Script 12 — File I/O + JSON
-Started: 2026-07-16. Not yet gate-cleared.
+## Currently Active: Script 13 — Modules + Imports
+Started: 2026-07-17. Not yet gate-cleared.
+
+Scope: `import` mechanics, `import module` vs `from module import thing` vs
+`from module import *` (and why the last is discouraged in production),
+splitting AlphaDefense's code across multiple files (`exceptions.py`,
+`scoring.py`, `logging_config.py` etc. instead of one script), packages and
+`__init__.py`, circular import errors.
+
+Queued immediately after: **Script 13.5 — Generators** (`yield`, lazy
+iteration) — added specifically for memory-efficient handling of the 590K-row
+IEEE-CIS dataset and later streaming/batch use in Phase 4/5 real-time serving.
 
 ---
 
@@ -93,15 +100,21 @@ Started: 2026-07-16. Not yet gate-cleared.
 - 21-day DSA sprint: Week 1 arrays/hashmaps/two pointers/sliding window,
   Week 2 binary search/trees/linked lists/heaps, Week 3 graphs/DP/backtracking.
 - Phase 0 revision week (5 days, Mon–Fri, 1–2 hrs/day) scheduled to run after
-  Script 13 gate-clears and before Phase 1 EDA begins. Structure: Day 1
-  Scripts 1–4, Day 2 Scripts 5–7, Day 3 Scripts 8–10 (including two open
+  Script 13 (+ 13.5) gate-clears and before Phase 1 EDA begins. Structure:
+  Day 1 Scripts 1–4, Day 2 Scripts 5–7, Day 3 Scripts 8–10 (including two open
   Script 10 retrieval gaps logged 2026-07-16: fit/transform explanation,
-  fraud-filter list comprehension), Day 4 Scripts 11–13, Day 5 integration
-  test combining decorators + comprehensions + pandas + error handling in
-  one fraud-scoring pipeline snippet.
+  fraud-filter list comprehension), Day 4 Scripts 11–13(.5), Day 5 integration
+  test combining decorators + comprehensions + pandas + error handling + file
+  I/O in one fraud-scoring pipeline snippet.
 
 ---
 
 ## Next Milestone
-Complete Script 12 (File I/O + JSON) → Script 13 (Modules + Imports) →
+Complete Script 13 (Modules + Imports) → Script 13.5 (Generators) →
 Phase 0 revision week → begin Phase 1 (EDA on IEEE-CIS dataset).
+
+**Reality check, stated plainly:** Phase 0 is the Python foundation, not
+AlphaDefense itself. Finishing Script 13 is a real milestone but is not
+equivalent to having built the fraud detection system — the resume-relevant
+work (EDA, XGBoost, SHAP, VaR/GARCH, Fairlearn, FastAPI/Streamlit, MLOps)
+starts at Phase 1, after the revision week. 
