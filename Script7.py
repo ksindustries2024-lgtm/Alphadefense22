@@ -51,6 +51,7 @@ print("=" * 60)
 print(f"Merged df shape: {df.shape}")
 coverage = train_transaction['TransactionID'].isin(train_identity['TransactionID']).mean() * 100
 print(f"% of transactions with matching identity data: {coverage:.2f}%")
+print(train_transaction.shape[0] == df.shape[0])
 
 # ── STEP 4: Missing Value Analysis ──────────────────────────
 # IEEE-CIS has many columns with massive nulls (V-columns especially).
