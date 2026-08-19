@@ -81,3 +81,8 @@ print("\n[EDA-1 SUMMARY]")
 print(f"Data loads correctly, TransactionID is a safe join key, "
       f"merge preserves all {train_transaction.shape[0]:,} transaction rows.")
 print("Verdict: raw data integrity CONFIRMED. Safe to proceed to EDA-2.")
+#Proper explain about eda 1 main concept
+"""If you load as float64 first and downcast after, for a moment in time you have both arrays in RAM 
+at once — the full float64 array AND the new float32 copy pandas creates during the .astype() conversion 
+— so peak memory usage is actually higher than either final state alone. Specifying dtype at read_csv time 
+skips that overlap entirely, because pandas never creates the float64 array in the first place."""
