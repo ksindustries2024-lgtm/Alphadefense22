@@ -32,8 +32,8 @@ X_test  = X.iloc[split_idx:].copy()
 y_train = y.iloc[:split_idx].copy()
 y_test  = y.iloc[split_idx:].copy()
 
-print(f"Training set rows : {X_train.shape[0]:,} (~8.0% fraud: {y_train.mean()*100:.2f}%)")
-print(f"Test set rows     : {X_test.shape[0]:,} (~8.0% fraud: {y_test.mean()*100:.2f}%)")
+print(f"Training set rows : {X_train.shape[0]:,} (fraud: {y_train.mean()*100:.2f}%)")
+print(f"Test set rows     : {X_test.shape[0]:,} ( fraud: {y_test.mean()*100:.2f}%)")
 
 # STEP 4: Classify Column Types to prevent Ordinal/Median math errors
 num_cols = X_train.select_dtypes(include=['int64', 'float64']).columns.tolist()
