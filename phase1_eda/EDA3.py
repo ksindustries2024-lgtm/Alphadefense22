@@ -37,7 +37,7 @@ fig, ax1 = plt.subplots(figsize=(11, 6))
 null_perc_finding[null_cols].plot(kind='bar', ax=ax1, width=0.7)
 ax1.set_ylabel('Null Rate (0-1)')
 ax1.set_ylim(0, 1.05)
-ax1.legend(loc='upper left', title='Null% columns')
+ax1.legend(loc='upper center', title='Null% columns')
 ax1.set_xticklabels(null_perc_finding.index, rotation=0)
 
 # ax2 = a second Axes, same x positions, but its OWN y-scale
