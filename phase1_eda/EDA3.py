@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 # STEP 1: Null% for each confounder column, split by ProductCD
 # (replace this block with your actual df.groupby(...) call)
 # ============================================================
+df=pd.read_csv(r"C:\Users\krrishmalhan122\AlphaDefense\clean_data.csv")  # Example: load a sample of the dataset
 null_perc_finding = df.groupby("ProductCD")[
     ['addr2', 'id_16', 'id_13', 'DeviceType', 'DeviceInfo']
 ].apply(lambda x: x.isnull().mean())
