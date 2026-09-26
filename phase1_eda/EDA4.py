@@ -233,5 +233,5 @@ print('V95' in columns_to_keep, 'V96' in columns_to_keep, 'V97' in columns_to_ke
 # not be caught by this method. Full 292x292 cross-block correlation was
 # judged intractable/noisy relative to the benefit for this phase.
 
-null_fill[columns_to_keep + ['isFraud']].to_csv(OUTPUT_PATH, index=False)
-print(f"Saved {len(columns_to_keep)} features + isFraud to {OUTPUT_PATH}")
+null_fill[columns_to_keep + ['isFraud', 'TransactionID']].to_csv(OUTPUT_PATH, index=False)#for eda 5 merging we add transaction id as to merge eda3 and eda4 csv for eda5 csv
+print(f"Saved {len(columns_to_keep)} features + isFraud+TransactionID to {OUTPUT_PATH}")
