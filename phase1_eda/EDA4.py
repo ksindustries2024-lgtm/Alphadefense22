@@ -24,109 +24,72 @@ multicollinearity and structurally correlated missingness. This script:
 Output: eda4_output.csv — 102 surviving V-columns + isFraud.
 """
 
-import json
-from collections import defaultdict
-
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt#for better visualization of the output 
 from statsmodels.stats.outliers_influence import variance_inflation_factor
+import json
 
-DATA_PATH = r"C:\Users\krrishmalhan122\AlphaDefense\clean_data.csv"
-VIF_CACHE_PATH = r"C:\Users\krrishmalhan122\AlphaDefense\vif_results.json"
-OUTPUT_PATH = r"C:\Users\krrishmalhan122\AlphaDefense\eda4_output.csv"
-
-RECOMPUTE_VIF = False  # False = load cached VIF from disk (fast). Flip to
-                        # True only if the underlying data/imputation changes
-                        # — a full recompute takes 5-10 minutes.
-
-
-# ---------------------------------------------------------------------------
-# STEP 1 — Load data and isolate the V-columns
-# ---------------------------------------------------------------------------
-df = pd.read_csv(DATA_PATH)
+df=pd.read_csv(r"C:\Users\krrishmalhan122\AlphaDefense\clean_data.csv")
+# Load only the V-columns + isFraud (memory-safe: don't reload the whole 394-col file if you already have df in memory from Script 7)
+# If starting fresh in this script, specify dtype at read time like you learned in EDA-1 — don't skip that lesson here.
 
 v_cols = [col for col in df.columns if col.startswith('V')]
 print(f"Number of V-columns: {len(v_cols)}")
 print(df[v_cols].dtypes)
-
 v_null_counts = df[v_cols].isnull().sum().sort_values(ascending=False)
 print(v_null_counts.head(20))
-
+# Take the top one, say it's called 'V1' for example
 top_missing_col = v_null_counts.index[0]
 print(f"Top missing column: {top_missing_col}")
 
-# Sanity check inherited from EDA-3: is missingness here explained by
-# ProductCD the same way it was for the identity/device columns?
-null_check = df.groupby('ProductCD')[
-    ["V277", "V95", "V279", "V167", "V12", "V53", "V75", "V169", "V35", "V220", "V1", "V281"]
-].apply(lambda x: x.isnull().mean())
+# Now check: does missingness in this column relate to ProductCD, same as EDA-3?
+null_check=df.groupby('ProductCD')[["V277","V95",'V279','V167','V12','V53', 'V75','V169','V35','V220', 'V1','V281']].apply(lambda x: x.isnull().mean())
 print(f"checking the null% with productCD which is:{null_check}")
-
-
-# ---------------------------------------------------------------------------
-# STEP 2 — Group V-columns into blocks by identical null-count
-# ---------------------------------------------------------------------------
-# Columns that are missing in exactly the same rows almost certainly came
-# from the same underlying Vesta feature-engineering process. Grouping by
-# null-count is a cheap, reliable proxy for "these columns are related."
+# Group V-columns by identical null count — this IS the block boundary
 null_counts_per_col = df[v_cols].isnull().sum()
 
+# Group column names by their null count value
+from collections import defaultdict
 blocks_by_nullcount = defaultdict(list)
 for col, count in null_counts_per_col.items():
     blocks_by_nullcount[count].append(col)
 
+# Show block sizes — sorted by how many columns share that null count, biggest blocks first
 block_summary = sorted(blocks_by_nullcount.items(), key=lambda x: -len(x[1]))
 for null_count, cols in block_summary:
     print(f"Null count {null_count}: {len(cols)} columns -> {cols}")
-
-null_rate = df[v_cols].isnull().sum().sum()
+null_rate=df[v_cols].isnull().sum().sum()#actually here first sum() gives sum for each v column then second sum() give for whole dataframe
 print(f"Total null values in V-columns: {null_rate}")
 
-
-# ---------------------------------------------------------------------------
-# STEP 3 — Group-aware imputation
-# ---------------------------------------------------------------------------
 def group_aware_impute(df, v_cols, group_col='ProductCD'):
-    """
-    Fill each V-column's missing values using the median of its own
-    ProductCD group — not a global median, since EDA-3 showed missingness
-    itself is ProductCD-driven (different transaction types trigger
-    different fields entirely).
-
-    If a whole ProductCD group has zero non-null values for a column,
-    there is no median to compute — that's structural absence (the field
-    genuinely doesn't apply to that transaction type), so it's filled
-    with 0 rather than left null or back-filled from other groups.
-    """
     df_filled = df.copy()
     for col in v_cols:
+        # Compute median per ProductCD group, ignoring NaNs automatically
         group_medians = df.groupby(group_col)[col].median()
-
+        
         for group_value in df[group_col].unique():
             mask = df[group_col] == group_value
             median_val = group_medians[group_value]
-            fill_value = 0 if pd.isna(median_val) else median_val
-
+            
+            if pd.isna(median_val):
+                # 100% missing in this group — no real median exists, structural absence
+                fill_value = 0
+            else:
+                fill_value = median_val
+            
+            # Fill only the null rows within this specific group
             col_mask = mask & df[col].isnull()
             df_filled.loc[col_mask, col] = fill_value
-
+    
     return df_filled
+null_fill=group_aware_impute(df, v_cols, group_col='ProductCD') 
+print(f"Null values after group-aware imputation: {null_fill[v_cols].isnull().sum()}and for the whole dataframe is:{null_fill[v_cols].isnull().sum().sum()}")
+#Here we will actually build full list of v columns pair as per null count as blocks
 
 
-null_fill = group_aware_impute(df, v_cols, group_col='ProductCD')
-print(
-    f"Null values after group-aware imputation: {null_fill[v_cols].isnull().sum()}"
-    f"and for the whole dataframe is:{null_fill[v_cols].isnull().sum().sum()}"
-)
+RECOMPUTE_VIF = False  # ← flip this to False after the first successful run
 
-
-# ---------------------------------------------------------------------------
-# STEP 4 — VIF, computed block-scoped (not globally)
-# ---------------------------------------------------------------------------
-# Each column's VIF is computed using only the other columns in its own
-# null-count block as context, not all 292 V-columns. Global VIF on this
-# many correlated columns is numerically unstable and doesn't match how
-# the redundancy actually clusters (block membership already IS the
-# grouping signal from Step 2).
 if RECOMPUTE_VIF:
     vif_results = {}
     for null_count, cols in blocks_by_nullcount.items():
@@ -136,32 +99,14 @@ if RECOMPUTE_VIF:
             vif_value = variance_inflation_factor(block_array, i)
             vif_results[block_df.columns[i]] = vif_value
             print(f"VIF for {block_df.columns[i]}: {vif_value}")
-    with open(VIF_CACHE_PATH, 'w') as f:
+    with open(r"C:\Users\krrishmalhan122\AlphaDefense\vif_results.json", 'w') as f:
         json.dump(vif_results, f)
 else:
-    with open(VIF_CACHE_PATH, 'r') as f:
-        vif_results = json.load(f)
+    with open(r"C:\Users\krrishmalhan122\AlphaDefense\vif_results.json", 'r') as f:
+        vif_results = json.load(f)   
 
 
-# ---------------------------------------------------------------------------
-# STEP 5 — Sub-cluster each block's high-VIF columns by pairwise correlation
-# ---------------------------------------------------------------------------
 def cluster_block(high_vif_cols, corr_matrix, threshold=0.8):
-    """
-    VIF > 10 only says "this column is redundant with SOMETHING in its
-    block" — not which one, and not whether all high-VIF columns in a
-    block form a single group. This clusters them properly.
-
-    Critical rule: a candidate joins an existing cluster only if it
-    correlates >= threshold with EVERY current member of that cluster
-    (not just one). A weaker "matches any member" rule breaks under
-    non-transitive correlation — e.g. A-B=0.85, B-C=0.85, A-C=0.60 would
-    wrongly chain A and C into one cluster via B, even though A and C
-    aren't actually redundant with each other. Requiring agreement with
-    ALL members prevents that chaining trap while still correctly forming
-    genuine all-mutual clusters. Columns that don't cluster with anyone
-    naturally end up as their own size-1 cluster — no special case needed.
-    """
     clusters = []
     claimed = set()
     for col in high_vif_cols:
@@ -178,33 +123,32 @@ def cluster_block(high_vif_cols, corr_matrix, threshold=0.8):
         clusters.append(cluster)
     return clusters
 
-
-# Correlation of every numeric column against isFraud, computed ONCE — this
-# value doesn't change per block (unlike block_corr below, which is
-# block-specific), so it lives outside the loop.
 corr_matrix_target = null_fill.select_dtypes(include=['integer', 'float']).corr()['isFraud']
 
+columns_to_keep = []   # ← created ONCE, before the loop. This is your FINAL answer,
+                        #   collected piece by piece from all 12 blocks. It must survive
+                        #   across every loop iteration, so it sits outside the loop.
 
-# ---------------------------------------------------------------------------
-# STEP 6 — Per block: split by VIF, cluster, keep the best of each cluster
-# ---------------------------------------------------------------------------
-columns_to_keep = []  # Shared accumulator across all 12 blocks.
-
-for null_count, cols in blocks_by_nullcount.items():
+for null_count, cols in blocks_by_nullcount.items():   # ← this loop already existed — runs once per block, 12 times total
     high_vif_cols = [col for col in cols if vif_results[col] > 10]
     low_vif_cols = [col for col in cols if vif_results[col] <= 10]
     print(f"Block {null_count}: {len(high_vif_cols)} high VIF, {len(low_vif_cols)} low VIF")
 
-    # Pairwise correlation matrix for THIS block's high-VIF columns only —
-    # recomputed fresh every iteration, matching the block-scoped VIF design.
-    block_corr = null_fill[high_vif_cols].corr()
-    clusters = cluster_block(high_vif_cols, block_corr, threshold=0.8)
+    # THE ACTUAL FIX: everything below this line used to sit OUTSIDE the loop.
+    # Moving it INSIDE means it now runs fresh, once per block, instead of once total.
 
-    # Keep/drop rule: within each cluster, keep the single strongest
-    # |correlation with isFraud|. If even the best member is near-zero
-    # (<= 0.01), drop the whole cluster — a token survivor with no real
-    # signal isn't worth the feature slot.
-    for cluster in clusters:
+    block_corr = null_fill[high_vif_cols].corr()
+    # ↑ correlation matrix for THIS block's high-VIF columns only — computed fresh
+    #   every iteration, so block 1 gets its own matrix, block 2 gets its own, etc.
+    #   This is what "corr_matrix" was missing entirely before — it never existed.
+
+    choosen_cluster = cluster_block(high_vif_cols, block_corr, threshold=0.8)
+    # ↑ THIS is the actual fix to the main bug. Before: called once, after the loop,
+    #   using only the leftover last block's high_vif_cols. Now: called 12 times,
+    #   once per block, each time using THAT block's own columns and THAT block's
+    #   own correlation matrix. Every block now actually gets clustered.
+
+    for cluster in choosen_cluster:
         best_col, best_score = None, -1
         for col in cluster:
             score = abs(corr_matrix_target[col])
@@ -212,26 +156,22 @@ for null_count, cols in blocks_by_nullcount.items():
                 best_score, best_col = score, col
         if best_score > 0.01:
             columns_to_keep.append(best_col)
+    # ↑ your keep/drop logic — unchanged from what you already wrote and understood.
+    #   Now runs once per block too, appending THIS block's winners into the SAME
+    #   columns_to_keep list every time — so it grows across all 12 blocks instead
+    #   of being overwritten.
 
-    # Low-VIF columns skip clustering entirely — no redundancy to resolve,
-    # just check them against the same isFraud-signal floor individually.
     for col in low_vif_cols:
         if abs(corr_matrix_target[col]) > 0.01:
             columns_to_keep.append(col)
+    # ↑ same idea — this block's low-VIF survivors get added to the same growing list.
 
-print(f"Final columns to keep (length {len(columns_to_keep)}), sample: {columns_to_keep[:10]}")
+print(f"Final columns to keep (length {len(columns_to_keep)}),smample: {columns_to_keep[:10]}")
 
-# Verification: V95/V96/V97 have hand-checked correlation with isFraud of
-# roughly -0.004 to -0.005 (below the 0.01 floor) despite huge pairwise VIF
-# with each other — they should NOT survive. Confirms keep/drop logic works
-# on a known case, not just "the code ran without erroring."
 print('V95' in columns_to_keep, 'V96' in columns_to_keep, 'V97' in columns_to_keep)
+# Only AFTER all 12 blocks have run and columns_to_keep has everyone's survivors:
+null_fill[columns_to_keep + ['isFraud', 'TransactionID']].to_csv(r"C:\Users\krrishmalhan122\AlphaDefense\eda4_output.csv", index=False)
+print(f"Saved {len(columns_to_keep)} features + isFraud + TransactionID to {df}")
+print('TransactionID' in null_fill.columns)
+#for eda 5 merging we add transaction id as to merge eda3 and eda4 csv for eda5 csv
 
-# NOTE (documented limitation, not a bug): clustering here is block-wise
-# only, never cross-block, since VIF itself was only ever computed
-# within-block. A genuine but coincidental cross-block correlation would
-# not be caught by this method. Full 292x292 cross-block correlation was
-# judged intractable/noisy relative to the benefit for this phase.
-
-null_fill[columns_to_keep + ['isFraud', 'TransactionID']].to_csv(OUTPUT_PATH, index=False)#for eda 5 merging we add transaction id as to merge eda3 and eda4 csv for eda5 csv
-print(f"Saved {len(columns_to_keep)} features + isFraud+TransactionID to {OUTPUT_PATH}")
