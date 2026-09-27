@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AlphaDefense — Phase 1 EDA Findings Report</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2f3a;
+    --text: #e6e8eb;
+    --muted: #9aa3b2;
+    --accent: #4fd1c5;
+    --warn: #f0a860;
+    --danger: #e56b6f;
+    --good: #79c99e;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    margin: 0;
+    padding: 0;
+    line-height: 1.6;
+  }
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .wrap {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  header.title {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 24px;
+    margin-bottom: 32px;
+  }
+  header.title .kicker {
+    color: var(--accent);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+  }
+  header.title h1 {
+    font-size: 28px;
+    margin: 8px 0 4px;
+  }
+  header.title .meta {
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin: 28px 0 8px;
+  }
+  .stat {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .stat .num {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+    font-family: var(--mono);
+  }
+  .stat .label {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  section {
+    margin-bottom: 36px;
+  }
+  section h2 {
+    font-size: 19px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+    margin-bottom: 16px;
+  }
+  section h2 .tag {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--bg);
+    background: var(--accent);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 700;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .finding-block { margin-bottom: 14px; }
+  .finding-block:last-child { margin-bottom: 0; }
+  .finding-block .label {
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+  code, .mono {
+    font-family: var(--mono);
+    background: #1e222b;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.92em;
+    color: var(--accent);
+  }
+  ul.clean {
+    margin: 6px 0 0;
+    padding-left: 20px;
+  }
+  ul.clean li { margin-bottom: 6px; }
+  .flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+    margin-bottom: 10px;
+  }
+  .flag.hyp {
+    background: rgba(240,168,96,0.15);
+    color: var(--warn);
+    border: 1px solid rgba(240,168,96,0.4);
+  }
+  .flag.verified {
+    background: rgba(121,201,158,0.15);
+    color: var(--good);
+    border: 1px solid rgba(121,201,158,0.4);
+  }
+  .hypothesis-box {
+    border-left: 3px solid var(--warn);
+    background: rgba(240,168,96,0.06);
+    padding: 10px 14px;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.95em;
+    color: var(--muted);
+  }
+  .before-after {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-family: var(--mono);
+    font-size: 15px;
+    margin: 10px 0;
+    flex-wrap: wrap;
+  }
+  .before-after .box {
+    background: #1e222b;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 14px;
+  }
+  .before-after .arrow { color: var(--accent); font-size: 18px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    margin-top: 8px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+  }
+  .drop-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .drop-list code {
+    color: var(--danger);
+  }
+  footer {
+    margin-top: 60px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .pipeline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .pipeline .step {
+    background: #1e222b;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: var(--text);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="title">
+    <div class="kicker">AlphaDefense — Phase 1</div>
+    <h1>EDA Findings Report</h1>
+    <div class="meta">EDA-1 through EDA-7 · IEEE-CIS Fraud Detection Dataset · Closed Sept 27, 2026</div>
+  </header>
+
+  <div class="summary-grid">
+    <div class="stat"><div class="num">590,540</div><div class="label">raw rows (post-merge)</div></div>
+    <div class="stat"><div class="num">3.51%</div><div class="label">overall fraud rate</div></div>
+    <div class="stat"><div class="num">292 → 160</div><div class="label">V-columns → final feature count</div></div>
+    <div class="stat"><div class="num">27.5×</div><div class="label">class imbalance ratio</div></div>
+  </div>
+
+  <section id="eda1">
+    <h2><span class="tag">EDA-1</span> Integrity &amp; Loading</h2>
+    <div class="card">
+      <div class="finding-block">
+        <div class="label">Merge strategy</div>
+        <code>train_transaction</code> (left) ⟵ merged ⟵ <code>train_identity</code> (right), joined on <code>TransactionID</code>.
+      </div>
+      <div class="finding-block">
+        <div class="label">Why this direction</div>
+        Every row of <code>train_transaction</code> carries the fraud label and must be kept regardless of identity-match status.
+        Identity/device checks were only performed for a subset of transactions — so a row with no match in
+        <code>train_identity</code> gets its identity columns filled with <code>NaN</code>, not dropped. NaN here reflects
+        "no identity check was performed," which becomes directly relevant later (EDA-3's confounder finding).
+      </div>
+    </div>
+  </section>
+
+  <section id="eda2">
+    <h2><span class="tag">EDA-2</span> Target Distribution &amp; Class Imbalance</h2>
+    <div class="card">
+      <div class="finding-block">
+        <div class="label">Fraud rate</div>
+        <span class="mono" style="font-size:1.1em">3.51%</span> fraud vs. 96.49% legitimate.
+      </div>
+      <div class="finding-block">
+        <div class="label">Why accuracy is the wrong metric</div>
+        A model predicting "legitimate" for every row scores 96.49% accuracy while catching zero fraud. Accuracy is
+        meaningless under this imbalance — precision/recall (and later, precision@k) are the real targets.
+      </div>
+      <div class="finding-block">
+        <div class="label">Fix applied</div>
+        Class imbalance ratio = legitimate ÷ fraud ≈ <code>27.5</code>, passed to XGBoost's
+        <code>scale_pos_weight</code>. Effect: misclassifying a fraud case as legitimate is penalized ~27.5× more
+        heavily during training than the reverse error — forcing the model to actively prioritize recall on the
+        minority class rather than defaulting to the majority-class shortcut.
+      </div>
+    </div>
+  </section>
+
+  <section id="eda3">
+    <h2><span class="tag">EDA-3</span> Missing Value Structure</h2>
+    <div class="card">
+      <span class="flag verified">✓ VERIFIED CORRELATION</span>
+      <div class="finding-block">
+        <div class="label">Confirmed finding</div>
+        <ul class="clean">
+          <li><code>ProductCD = W</code>: low null rate in identity fields, low fraud rate (<b>2.0%</b>)</li>
+          <li><code>ProductCD = C</code>: high null rate in <code>addr2</code>, high fraud rate (<b>11.7%</b>)</li>
+        </ul>
+      </div>
+      <div class="finding-block">
+        <div class="label">Confounder mechanism</div>
+        Both patterns trace back to a shared root cause — <code>ProductCD</code> category itself — rather than nulls
+        directly causing or predicting fraud. Treating "more nulls" as a universal fraud signal would have been a
+        modeling error: the real driver is which product type the transaction belongs to, and null rate is just a
+        downstream symptom of that.
+      </div>
+      <span class="flag hyp">⚠ UNTESTED HYPOTHESIS — not in the model, not a claimed finding</span>
+      <div class="hypothesis-box">
+        <b>Why</b> ProductCD categories differ in null rate and fraud rate to begin with — e.g. differing verification
+        requirements, transaction size, or merchant category by product type — was <b>not investigated</b> in this
+        project. This remains an open question, explicitly separated here from the verified correlation above.
+      </div>
+    </div>
+  </section>
+
+  <section id="eda4">
+    <h2><span class="tag">EDA-4</span> Numerical Distributions &amp; Multicollinearity (VIF)</h2>
+    <div class="card">
+      <div class="before-after">
+        <div class="box">292 V-columns</div>
+        <span class="arrow">→</span>
+        <div class="box">102 retained</div>
+      </div>
+      <div class="finding-block">
+        <div class="label">What VIF measures</div>
+        Variance Inflation Factor quantifies how redundant a column is given the other columns — a high VIF means the
+        column is largely reconstructable from a linear combination of others, adding instability/noise to a linear
+        model without adding independent signal.
+      </div>
+      <div class="finding-block">
+        <div class="label">Pipeline</div>
+        <div class="pipeline">
+          <span class="step">Block discovery (12 blocks, by identical null-count)</span>
+          <span class="arrow">→</span>
+          <span class="step">Group-aware imputation</span>
+          <span class="arrow">→</span>
+          <span class="step">Block-scoped VIF</span>
+          <span class="arrow">→</span>
+          <span class="step">Within-block clustering (pairwise corr ≥ 0.8, ALL-member rule)</span>
+          <span class="arrow">→</span>
+          <span class="step">Keep-by-target-correlation</span>
+        </div>
+      </div>
+      <div class="finding-block">
+        <div class="label">Keep/drop rule</div>
+        Within each cluster, the column with the <b>highest |corr(isFraud)|</b> survives as the cluster's representative
+        — VIF is what grouped columns into clusters, not what decides the survivor. If even the best member's
+        correlation is ≤ 0.01, the entire cluster is dropped rather than keeping a token low-signal survivor.
+      </div>
+      <div class="finding-block">
+        <div class="label">Scoping limitation (documented, not fixed)</div>
+        VIF/clustering are block-scoped only — a genuine cross-block redundancy would not be caught by this method.
+        Full 292×292 VIF was judged intractable/noisy relative to the benefit.
+      </div>
+    </div>
+  </section>
+
+  <section id="eda5">
+    <h2><span class="tag">EDA-5</span> Categorical &amp; Cardinality Encoding</h2>
+    <div class="card">
+      <table>
+        <tr><th>Cardinality</th><th>Technique</th><th>Columns</th></tr>
+        <tr><td>≤ 15 unique values</td><td>One-hot (<code>pd.get_dummies</code>)</td><td>22 (ProductCD, card4, card6, M1–M9, id_-block, DeviceType)</td></tr>
+        <tr><td>&gt; 15 unique values</td><td>Smoothed, time-respecting target encoding</td><td>10 (card1/2/3/5, addr1/2, email domains, id_31, DeviceInfo)</td></tr>
+      </table>
+      <div class="finding-block" style="margin-top:16px">
+        <div class="label">Target encoding formula</div>
+        <code>(fraud_count + K × 0.0351) / (total_count + K)</code>, K = 10
+      </div>
+      <div class="finding-block">
+        <div class="label">Why 0.0351 and not 0 or 0.5</div>
+        0.0351 is the dataset's global fraud rate. For a category never seen before (or seen only once), your best
+        unbiased guess is "behaves like the average category" — not 0% (assumes impossible certainty of safety) and
+        not 50% (assumes maximum uncertainty, which overstates risk). Smoothing toward the global rate is the
+        principled default, not an arbitrary choice.
+      </div>
+      <div class="finding-block">
+        <div class="label">Worked example — why smoothing is necessary</div>
+        A category seen exactly once, where that one occurrence was fraud, has a raw ratio of 1/1 = 100% — absurd
+        confidence from a sample size of one. With K=10 smoothing:
+        <code>(1 + 10×0.0351) / (1+10) ≈ 0.123</code> — pulled most of the way back toward the global rate, with only
+        partial weight given to the single observed data point.
+      </div>
+      <div class="finding-block">
+        <div class="label">Leakage prevention</div>
+        Computed via <code>groupby(col)['isFraud'].cumsum() - isFraud</code> and <code>groupby(col).cumcount()</code>
+        on TransactionDT-sorted data — each row's own <code>isFraud</code> value is excluded from its own encoding,
+        and only prior (time-respecting) history contributes.
+      </div>
+    </div>
+  </section>
+
+  <section id="eda6">
+    <h2><span class="tag">EDA-6</span> Correlation &amp; Leakage Audit</h2>
+    <div class="card">
+      <div class="finding-block">
+        <div class="label">Operation 2 — leakage check (feature vs. target)</div>
+        Every feature's individual correlation with <code>isFraud</code> was scanned. Max |corr| = <b>0.287</b>
+        (V257, card1_encoded) — well under the 0.5–0.6 threshold that would suggest a leaked proxy for the target.
+        <br><br>
+        <b>Conclusion:</b> no single feature leaks fraud information. Fraud is predicted by a pattern across many
+        features, not any one column. card1_encoded's correlation was specifically interrogated and confirmed as real
+        signal (card reuse in fraud is genuine, pre-transaction-available behavior), not a leak.
+      </div>
+      <div class="finding-block">
+        <div class="label">Operation 3 — redundancy check (feature vs. feature)</div>
+        Cross-column correlation matrix, threshold |corr| ≥ <b>0.9</b>. Same-original-column one-hot pairs
+        (e.g. <code>card6_credit</code>/<code>card6_debit</code>) ignored as structurally-forced artifacts. Genuine
+        cross-pipeline duplicates resolved via interpretability tie-break (kept <code>ProductCD_W</code> over
+        <code>V1</code>, <code>ProductCD_S</code> over <code>V41</code>) when |corr(isFraud)| was too close to call,
+        else by higher |corr(isFraud)|.
+        <div class="drop-list">
+          <code>V1</code><code>id_28_Found</code><code>id_15_Found</code><code>V41</code><code>id_29_NotFound</code><code>id_16_NotFound</code>
+        </div>
+      </div>
+      <div class="finding-block">
+        <div class="label">Why interpretability wins on ties</div>
+        This is a fraud model that will run through SHAP explainability and likely face compliance/audit scrutiny
+        (SAR justification, adverse-action explanations). When two features tie on predictive power, keeping the
+        interpretable one (<code>ProductCD_W</code>) over the anonymized one (<code>V1</code>) costs nothing in
+        performance but buys a defensible explanation — a SHAP value attached to a named business category means
+        something to an auditor; the same value attached to an anonymized Vesta feature does not.
+      </div>
+      <div class="finding-block">
+        <div class="label">Operation 4 — post-drop re-verification</div>
+        Confirmed each target-encoded column was computed only from its own source column + isFraud — never from
+        another feature column — so dropping unrelated redundant columns cannot retroactively invalidate a
+        surviving encoding.
+      </div>
+      <div class="before-after">
+        <div class="box">590,540 × 166</div>
+        <span class="arrow">→</span>
+        <div class="box">590,540 × 160</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="eda7">
+    <h2><span class="tag">EDA-7</span> Temporal Structure &amp; Train/Test Split</h2>
+    <div class="card">
+      <div class="finding-block">
+        <div class="label">Why chronological, not random</div>
+        A random split lets the model train on transactions that occur chronologically after test-set transactions —
+        effectively letting it "see the future" during training. In production, the model will never have access to
+        future data when scoring a live transaction, so a random split would produce inflated, unrealistic
+        validation performance that collapses in deployment.
+      </div>
+      <div class="finding-block">
+        <div class="label">Split method</div>
+        Sort by <code>TransactionDT</code>, then 80/20 index-cutoff split via <code>.iloc</code> — no shuffle.
+      </div>
+      <table>
+        <tr><th>Set</th><th>Rows</th><th>Fraud rate</th></tr>
+        <tr><td>Train</td><td>472,432</td><td>3.51%</td></tr>
+        <tr><td>Test</td><td>118,108</td><td>3.44%</td></tr>
+      </table>
+      <div class="finding-block" style="margin-top:14px">
+        <div class="label">Categorical encoding for modeling</div>
+        <b>Label Encoder</b> (not "OrdinalEncoder" loosely — the two were compared): converts categorical strings to
+        integers, handles unseen categories at inference by not crashing (assigns a fallback rather than erroring),
+        fit only on training data to avoid test-set leakage into the encoding scheme.
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    AlphaDefense — Phase 1 EDA closed Sept 27, 2026. All findings above were cold-verified against the author's own
+    reconstruction from memory, not copied from source scripts — corrections applied during verification are folded
+    into the final statements shown. Next: Phase 2 (XGBoost + GNN feature engineering).
+  </footer>
+
+</div>
+</body>
+</html>
